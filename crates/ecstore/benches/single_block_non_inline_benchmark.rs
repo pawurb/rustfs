@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use hotpath::criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rustfs_utils::HashAlgorithm;
 mod storage_api;
 use std::io::Cursor;

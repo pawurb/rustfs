@@ -89,6 +89,8 @@ hotpath-alloc = [
     "rustfs-utils/hotpath-alloc",
     "rustfs-crypto/hotpath-alloc",
 ]
+hotpath-cloud = ["hotpath", "hotpath/hotpath-cloud"]
+hotpath-callgrind = ["hotpath", "hotpath/hotpath-callgrind"]
 hotpath-cpu = [
     "hotpath",
     "hotpath/hotpath-cpu",
@@ -253,6 +255,7 @@ aws-smithy-async.workspace = true
 rustfs-s3-ops.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util", "fs"] }
 criterion = { workspace = true, features = ["html_reports"] }
+hotpath = { workspace = true, features = ["criterion-0-8"] }
 temp-env = { workspace = true, features = ["async_closure"] }
 tracing-subscriber = { workspace = true, features = ["json", "env-filter", "time"] }
 # Only for `pin_callsite_interest_for_test`, which registers a `NoSubscriber`

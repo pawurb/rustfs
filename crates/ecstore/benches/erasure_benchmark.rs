@@ -43,7 +43,7 @@
 //! - Both encoding and decoding operations
 //! - SIMD optimization for different shard sizes
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use hotpath::criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rustfs_utils::HashAlgorithm;
 mod storage_api;
 use std::hint::black_box;

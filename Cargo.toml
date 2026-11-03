@@ -387,7 +387,7 @@ dav-server = "0.11.0"
 # Performance Analysis and Memory Profiling
 rustfs-mimalloc = { version = "0.7.3" }
 # Preserve Unicode focus filters until rustfs/backlog#2302 is resolved.
-hotpath = { version = "0.30.3", default-features = false }
+hotpath = { version = "0.31.0", default-features = false }
 # Snapshot testing for output format regression detection
 insta = { version = "1.49" }
 
@@ -423,6 +423,14 @@ inherits = "release"
 [profile.profiling]
 inherits = "release"
 debug = true
+strip = "none"
+
+# hotpath-cloud benchmarks: unstripped symbols for Callgrind attribution,
+# no LTO and parallel codegen to keep the per-job rebuild fast.
+[profile.hotpath]
+inherits = "release"
+lto = false
+codegen-units = 16
 strip = "none"
 
 # Pin upstream fixes until compatible crates.io releases are available.

@@ -1,0 +1,83 @@
+name: hotpath benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  benchmark:
+    name: benchmark (${{ matrix.benchmark }})
+    # Fork pull requests get no `id-token: write`, so there is nothing to upload.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # Instruction counts depend on the Valgrind build, the Rust toolchain and
+    # the OS, so the image, the package and the toolchain are pinned.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # rustfs-ecstore erasure-coding Criterion benchmarks, each its own
+        # hotpath-cloud series: the PUT encode pipeline and the GET streaming decode.
+        include:
+          - benchmark: encode_pipeline_128KB
+            bench: single_block_non_inline_benchmark
+            id: single_block_non_inline_write_path/encode_pipeline/payload=128KB_4+2_block=128KB
+            iterations: 1000
+          - benchmark: streaming_decode_4MB
+            bench: erasure_benchmark
+            id: streaming_decode/decode/4+2_4096KB_64KB-block_verify-true
+            iterations: 100
+    concurrency:
+      group: hotpath-benchmark-${{ matrix.benchmark }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      id-token: write # the upload authenticates with the job's OIDC token
+    env:
+      HOTPATH_BENCHMARK: ${{ matrix.benchmark }}
+      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.99.0,profile=hotpath,valgrind=3.26.0
+      HOTPATH_OUTPUT_FORMAT: json
+      HOTPATH_CRITERION_ITERATIONS: ${{ matrix.iterations }}
+      # rust-toolchain.toml asks for `stable`; pin the exact version instead.
+      RUSTUP_TOOLCHAIN: "1.99.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.99.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # One cache per bench target, so the matrix jobs do not race for one key.
+          key: ${{ matrix.bench }}
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind=1:3.26.0-0ubuntu1
+          valgrind --version
+      - name: Build benchmark
+        id: build
+        run: |
+          bin=$(cargo build -q --locked --profile hotpath -p rustfs-ecstore --bench ${{ matrix.bench }} \
+            --features hotpath-alloc,hotpath-cloud,hotpath-callgrind --message-format=json \
+            | jq -r 'select(.reason == "compiler-artifact" and (.target.kind | index("bench"))) | .executable')
+          test -x "$bin"
+          echo "bin=$bin" >> "$GITHUB_OUTPUT"
+      - name: Run benchmark natively
+        env:
+          HOTPATH_OUTPUT_PATH: ${{ runner.temp }}/native.json
+        run: ${{ steps.build.outputs.bin }} --bench --test --exact '${{ matrix.id }}'
+      - name: Run benchmark under Callgrind and upload the merged report
+        env:
+          HOTPATH_UPLOAD: fail-on-error
+          HOTPATH_UPLOAD_RESPONSE_PATH: ${{ github.workspace }}/upload.json
+          HOTPATH_OUTPUT_PATH: ${{ runner.temp }}/merged.json
+          HOTPATH_MERGE_REPORT: ${{ runner.temp }}/native.json
+          HOTPATH_CALLGRIND_OUT_FILE: ${{ runner.temp }}/callgrind.out.%p
+        run: |
+          valgrind -q --tool=callgrind --instr-atstart=no \
+            --callgrind-out-file="$HOTPATH_CALLGRIND_OUT_FILE" \
+            ${{ steps.build.outputs.bin }} --bench --test --exact '${{ matrix.id }}'
+          test -s "$HOTPATH_UPLOAD_RESPONSE_PATH"
+          jq -e --arg id '${{ matrix.id }}' '.meta.run == "merged" and (.functions_icount.data | length > 0) and (.functions_timing.data | length > 0) and .meta.criterion.benchmark == $id' \
+            "$HOTPATH_OUTPUT_PATH" > /dev/null
